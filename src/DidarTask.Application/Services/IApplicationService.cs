@@ -1,3 +1,5 @@
+using System.Threading.Tasks;
+
 namespace DidarTask.Application.Services;
 
 /// <summary>
@@ -11,4 +13,9 @@ public interface IApplicationService
     /// Returns true when the Application service is reachable.
     /// </summary>
     bool Ping();
+
+    /// <summary>
+    /// Returns true when the Application service is reachable.
+    /// </summary>
+    Task<bool> PingAsync();
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using DidarTask.Application.Services;
 using Xunit;
 
@@ -43,6 +44,7 @@ public class PackagingConnectionTests
     private class FailingApplicationService : IApplicationService
     {
         public bool Ping() => false;
+        public Task<bool> PingAsync() => Task.FromResult(false);
     }
 
     [Fact]
@@ -57,6 +59,56 @@ public class PackagingConnectionTests
 
         Assert.False(result);
         var access = packagingService.GetAccessInfo(userId);
+        Assert.Equal("Basic", access.SubscriptionLevel);
+        Assert.Equal(3, access.AllowedFeatures);
+    }
+
+    [Fact]
+    public async Task VerifyPackagingConnectionAsync_ReturnsTrue()
+    {
+        var packagingService = new PackagingService();
+        var applicationService = new ApplicationService(packagingService);
+
+        Assert.True(await applicationService.VerifyPackagingConnectionAsync());
+    }
+
+    [Fact]
+    public async Task RequestAccessInfoAsync_ReturnsExpectedSubscriptionLevel()
+    {
+        var packagingService = new PackagingService();
+        var applicationService = new ApplicationService(packagingService);
+
+        var userId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        var access = await applicationService.RequestAccessInfoAsync(userId);
+
+        Assert.Equal("Basic", access.SubscriptionLevel);
+        Assert.Equal(3, access.AllowedFeatures);
+    }
+
+    [Fact]
+    public async Task ApplyBusinessChangeAsync_RollsBack_WhenPackagingUnavailable()
+    {
+        var packagingService = new PackagingService(isAvailable: false);
+        var applicationService = new ApplicationService(packagingService);
+
+        var result = await applicationService.TryApplyBusinessChangeAsync(5);
+
+        Assert.False(result);
+        Assert.Equal(0, applicationService.BusinessState);
+    }
+
+    [Fact]
+    public async Task ChangeSubscriptionAsync_RollsBack_WhenApplicationUnavailable()
+    {
+        var packagingService = new PackagingService();
+        var failingApp = new FailingApplicationService();
+        var userId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        var newInfo = new AccessInfo("VIP", 20);
+
+        var result = await packagingService.TryChangeSubscriptionAsync(userId, newInfo, failingApp);
+
+        Assert.False(result);
+        var access = await packagingService.GetAccessInfoAsync(userId);
         Assert.Equal("Basic", access.SubscriptionLevel);
         Assert.Equal(3, access.AllowedFeatures);
     }

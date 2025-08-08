@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace DidarTask.Application.Services;
 
@@ -31,6 +32,8 @@ public class PackagingService : IPackagingService
             : new AccessInfo("Free", 1);
     }
 
+    public Task<AccessInfo> GetAccessInfoAsync(Guid userId) => Task.FromResult(GetAccessInfo(userId));
+
     /// <summary>
     /// Attempts to change a user's subscription. If the application service is
     /// unavailable the change is rolled back to the previous value.
@@ -58,5 +61,33 @@ public class PackagingService : IPackagingService
             });
     }
 
+    public Task<bool> TryChangeSubscriptionAsync(Guid userId, AccessInfo newInfo, IApplicationService applicationService)
+    {
+        AccessInfo? previous = null;
+        return TransactionCoordinator.ExecuteAsync(
+            () =>
+            {
+                _subscriptions.TryGetValue(userId, out previous);
+                _subscriptions[userId] = newInfo;
+                return Task.CompletedTask;
+            },
+            () => applicationService.PingAsync(),
+            () =>
+            {
+                if (previous is not null)
+                {
+                    _subscriptions[userId] = previous;
+                }
+                else
+                {
+                    _subscriptions.Remove(userId);
+                }
+
+                return Task.CompletedTask;
+            });
+    }
+
     public bool Ping() => _isAvailable;
+
+    public Task<bool> PingAsync() => Task.FromResult(_isAvailable);
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 
 namespace DidarTask.Application.Services;
 
@@ -25,6 +26,26 @@ public static class TransactionCoordinator
         catch
         {
             rollback();
+            throw;
+        }
+    }
+
+    public static async Task<bool> ExecuteAsync(Func<Task> applyAsync, Func<Task<bool>> remoteCheckAsync, Func<Task> rollbackAsync)
+    {
+        try
+        {
+            await applyAsync();
+            if (!await remoteCheckAsync())
+            {
+                await rollbackAsync();
+                return false;
+            }
+
+            return true;
+        }
+        catch
+        {
+            await rollbackAsync();
             throw;
         }
     }

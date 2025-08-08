@@ -10,9 +10,12 @@ namespace DidarTask.Application.Services;
 public class PackagingService : IPackagingService
 {
     private readonly Dictionary<Guid, AccessInfo> _subscriptions = new();
+    private readonly bool _isAvailable;
 
-    public PackagingService()
+    public PackagingService(bool isAvailable = true)
     {
+        _isAvailable = isAvailable;
+
         // Seed with a couple of sample users and subscription info.
         var user1 = Guid.Parse("00000000-0000-0000-0000-000000000001");
         var user2 = Guid.Parse("00000000-0000-0000-0000-000000000002");
@@ -28,5 +31,32 @@ public class PackagingService : IPackagingService
             : new AccessInfo("Free", 1);
     }
 
-    public bool Ping() => true;
+    /// <summary>
+    /// Attempts to change a user's subscription. If the application service is
+    /// unavailable the change is rolled back to the previous value.
+    /// </summary>
+    public bool TryChangeSubscription(Guid userId, AccessInfo newInfo, IApplicationService applicationService)
+    {
+        AccessInfo? previous = null;
+        return TransactionCoordinator.Execute(
+            () =>
+            {
+                _subscriptions.TryGetValue(userId, out previous);
+                _subscriptions[userId] = newInfo;
+            },
+            () => applicationService.Ping(),
+            () =>
+            {
+                if (previous is not null)
+                {
+                    _subscriptions[userId] = previous;
+                }
+                else
+                {
+                    _subscriptions.Remove(userId);
+                }
+            });
+    }
+
+    public bool Ping() => _isAvailable;
 }
